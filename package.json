@@ -1,15 +1,17 @@
 {
-  "name": "airi-meeting-minutes-tmp",
+  "name": "airi-meeting-minutes",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "fonts": "bash scripts/download-fonts.sh"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.90.0",
+    "@react-pdf/renderer": "^4.5.1",
     "@supabase/supabase-js": "^2.103.3",
     "googleapis": "^171.4.0",
     "next": "14.2.35",

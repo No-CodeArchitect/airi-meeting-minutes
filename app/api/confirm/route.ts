@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { supabaseAdmin } from '@/lib/supabase';
+import { generateMeetingPDF } from '@/lib/pdf';
+import type { Meeting } from '@/types';
+
+export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -10,6 +14,7 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
 
+    // ── 1. DB 저장 ────────────────────────────────────────
     const { data, error } = await supabaseAdmin
       .from('meetings')
       .insert({
@@ -28,10 +33,19 @@ export async function POST(req: NextRequest) {
         future_plans: body.futurePlans || null,
         status: 'confirmed',
       })
-      .select('id')
+      .select('*')
       .single();
 
     if (error) throw error;
+
+    // ── 2. PDF 생성 (Drive 업로드는 step-10에서 추가) ────
+    try {
+      await generateMeetingPDF(data as Meeting);
+      // PDF 버퍼는 생성 확인용. Drive 업로드 후 URL 저장 예정.
+    } catch (pdfErr) {
+      console.warn('[confirm] PDF generation warning:', pdfErr);
+      // PDF 실패해도 레코드는 저장 완료로 처리
+    }
 
     return NextResponse.json({ id: data.id });
   } catch (err) {

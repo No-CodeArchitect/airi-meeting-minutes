@@ -38,3 +38,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# fonts (대용량 - scripts/download-fonts.sh로 별도 다운로드)
+/public/fonts/*.ttf
