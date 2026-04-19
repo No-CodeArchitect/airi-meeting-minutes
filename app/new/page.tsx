@@ -242,25 +242,25 @@ export default function NewPage() {
     setError('');
 
     try {
-      const res = await fetch('/api/confirm', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          date: data.approval.date,
-          startTime: data.approval.startTime,
-          endTime: data.approval.endTime,
-          topic: data.approval.topic,
-          attendees: data.approval.attendees,
-          place: data.approval.place,
-          amount: data.receipt.amount,
-          storeFullName: data.receipt.storeFullName,
-          storeName: data.receipt.storeName,
-          cardLast4: data.receipt.cardLast4,
-          handler: data.receipt.handler,
-          minutesContent: data.minutesContent,
-          futurePlans: data.futurePlans,
-        }),
-      });
+      // FormData로 전송 — 원본 파일도 함께 보내 Drive 업로드에 사용
+      const fd = new FormData();
+      fd.append('date',           data.approval.date);
+      fd.append('startTime',      data.approval.startTime);
+      fd.append('endTime',        data.approval.endTime);
+      fd.append('topic',          data.approval.topic);
+      fd.append('attendees',      JSON.stringify(data.approval.attendees));
+      fd.append('place',          data.approval.place);
+      fd.append('amount',         String(data.receipt.amount));
+      fd.append('storeFullName',  data.receipt.storeFullName);
+      fd.append('storeName',      data.receipt.storeName);
+      fd.append('cardLast4',      data.receipt.cardLast4);
+      fd.append('handler',        data.receipt.handler);
+      fd.append('minutesContent', data.minutesContent);
+      fd.append('futurePlans',    data.futurePlans);
+      if (receipt)  fd.append('receipt',  receipt);
+      if (approval) fd.append('approval', approval);
+
+      const res = await fetch('/api/confirm', { method: 'POST', body: fd });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? '저장 실패');
       router.push(`/meetings/${json.id}`);
