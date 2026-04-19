@@ -1,7 +1,12 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { SYSTEM_CONTEXT } from './claude-context';
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+// 모듈 로드 시점이 아닌 함수 호출 시점에 env를 읽도록 lazy 초기화
+function getClient() {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error('ANTHROPIC_API_KEY 환경변수가 설정되지 않았습니다.');
+  return new Anthropic({ apiKey });
+}
 
 // ─── 공통 타입 ────────────────────────────────────────────────
 export interface ReceiptInfo {
@@ -35,7 +40,7 @@ async function callClaudeJSON(
   messages: Anthropic.MessageParam[],
   maxTokens: number,
 ): Promise<Record<string, unknown>> {
-  const response = await client.messages.create({
+  const response = await getClient().messages.create({
     model: 'claude-opus-4-5',
     max_tokens: maxTokens,
     messages,
@@ -56,7 +61,7 @@ async function callClaudeText(
   system: string,
   maxTokens: number,
 ): Promise<string> {
-  const response = await client.messages.create({
+  const response = await getClient().messages.create({
     model: 'claude-opus-4-5',
     max_tokens: maxTokens,
     system,
