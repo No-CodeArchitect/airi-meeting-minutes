@@ -1,8 +1,18 @@
-export default function MeetingDetailPage() {
-  return (
-    <div className="p-8 max-w-4xl mx-auto">
-      <h2 className="text-2xl font-bold text-gray-900 mb-1">회의록 상세</h2>
-      <p className="text-sm text-gray-500">11단계에서 구현 예정</p>
-    </div>
-  );
+import { supabaseAdmin } from '@/lib/supabase';
+import { notFound } from 'next/navigation';
+import type { Meeting } from '@/types';
+import MeetingDetailClient from './MeetingDetailClient';
+
+export const dynamic = 'force-dynamic';
+
+export default async function MeetingDetailPage({ params }: { params: { id: string } }) {
+  const { data, error } = await supabaseAdmin
+    .from('meetings')
+    .select('*')
+    .eq('id', params.id)
+    .single();
+
+  if (error || !data) notFound();
+
+  return <MeetingDetailClient meeting={data as Meeting} />;
 }
