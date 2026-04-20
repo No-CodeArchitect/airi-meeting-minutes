@@ -158,9 +158,9 @@ export default function MeetingListClient() {
                     href={`/meetings/${m.id}`}
                     className="grid grid-cols-[1fr_120px_90px_90px_80px] gap-4 items-center px-6 py-4 hover:bg-gray-50 transition-colors pr-14"
                   >
-                    <div>
+                    <div className="min-w-0">
                       <p className="text-sm font-medium text-gray-900 truncate">{m.topic}</p>
-                      <p className="text-xs text-gray-400 mt-0.5">{m.store_name}</p>
+                      <p className="text-xs text-gray-400 mt-0.5 truncate">{m.store_name}</p>
                     </div>
                     <p className="text-sm text-gray-600">{formatDate(m.date)}</p>
                     <p className="text-sm text-gray-600">{m.handler ?? '-'}</p>
