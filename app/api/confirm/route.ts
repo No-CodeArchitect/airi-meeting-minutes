@@ -61,50 +61,54 @@ export async function POST(req: NextRequest) {
     if (error) throw error;
     const meeting = data as Meeting;
 
-    // ── 2. PDF 생성 ───────────────────────────────────────
-    const pdfBuffer = await generateMeetingPDF(meeting);
+    // ── 2. PDF/Drive는 백그라운드 처리 (await 하지 않음) ──
+    const receiptBuf  = receiptFile  ? Buffer.from(await receiptFile.arrayBuffer())  : null;
+    const approvalBuf = approvalFile ? Buffer.from(await approvalFile.arrayBuffer()) : null;
+    const receiptMime = receiptFile?.type ?? '';
+    const receiptExt  = receiptFile?.name.split('.').pop() ?? 'jpg';
 
-    // ── 3. Google Drive 업로드 ────────────────────────────
-    if (receiptFile && approvalFile) {
+    // 사용자는 즉시 상세 페이지로 이동, PDF/Drive 결과는 나중에 DB에 반영됨
+    (async () => {
       try {
-        const [receiptBuffer, approvalBuffer] = await Promise.all([
-          receiptFile.arrayBuffer().then(Buffer.from),
-          approvalFile.arrayBuffer().then(Buffer.from),
-        ]);
+        console.log('[PDF] 생성 시작:', meeting.id);
+        const pdfBuffer = await generateMeetingPDF(meeting);
+        console.log('[PDF] 생성 완료, size:', pdfBuffer.length);
 
-        const ext = receiptFile.name.split('.').pop() ?? 'jpg';
+        if (receiptBuf && approvalBuf) {
+          console.log('[Drive] 업로드 시작:', meeting.id);
+          const driveResult = await uploadMeetingFiles({
+            date:           body.date,
+            storeName:      body.storeFullName,
+            startTime:      body.startTime ?? '0000',
+            handler:        body.handler   ?? 'unknown',
+            receiptBuffer:  receiptBuf,
+            receiptMime,
+            receiptExt,
+            approvalBuffer: approvalBuf,
+            pdfBuffer,
+          });
 
-        const driveResult = await uploadMeetingFiles({
-          date:           body.date,
-          storeName:      body.storeFullName,
-          startTime:      body.startTime ?? '0000',
-          handler:        body.handler   ?? 'unknown',
-          receiptBuffer,
-          receiptMime:    receiptFile.type,
-          receiptExt:     ext,
-          approvalBuffer,
-          pdfBuffer,
-        });
+          await supabaseAdmin
+            .from('meetings')
+            .update({
+              drive_folder_id:      driveResult.folderId,
+              drive_folder_url:     driveResult.folderUrl,
+              folder_sequence:      driveResult.folderSequence,
+              receipt_drive_id:     driveResult.receiptDriveId,
+              approval_doc_drive_id: driveResult.approvalDocDriveId,
+              pdf_drive_id:         driveResult.pdfDriveId,
+              pdf_url:              driveResult.pdfUrl,
+            })
+            .eq('id', meeting.id);
 
-        // ── 4. DB에 Drive 정보 업데이트 ───────────────────
-        await supabaseAdmin
-          .from('meetings')
-          .update({
-            drive_folder_id:      driveResult.folderId,
-            drive_folder_url:     driveResult.folderUrl,
-            folder_sequence:      driveResult.folderSequence,
-            receipt_drive_id:     driveResult.receiptDriveId,
-            approval_doc_drive_id: driveResult.approvalDocDriveId,
-            pdf_drive_id:         driveResult.pdfDriveId,
-            pdf_url:              driveResult.pdfUrl,
-          })
-          .eq('id', meeting.id);
-      } catch (driveErr) {
-        console.warn('[confirm] Drive upload warning (non-fatal):', driveErr);
-        // Drive 실패해도 DB 레코드는 유지
+          console.log('[Drive] 업로드 완료:', meeting.id, driveResult.folderUrl);
+        }
+      } catch (bgErr) {
+        console.error('[PDF/Drive 오류]', bgErr instanceof Error ? bgErr.message : bgErr);
       }
-    }
+    })();
 
+    // ── 즉시 응답 (PDF/Drive 기다리지 않음) ──────────────
     return NextResponse.json({ id: meeting.id });
   } catch (err) {
     console.error('[confirm] error:', err);

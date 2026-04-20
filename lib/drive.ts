@@ -26,6 +26,8 @@ async function findOrCreateFolder(name: string, parentId: string): Promise<strin
     q: `name='${name}' and '${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
     fields: 'files(id)',
     spaces: 'drive',
+    includeItemsFromAllDrives: true,
+    supportsAllDrives: true,
   });
 
   if (res.data.files && res.data.files.length > 0) {
@@ -40,6 +42,7 @@ async function findOrCreateFolder(name: string, parentId: string): Promise<strin
       parents: [parentId],
     },
     fields: 'id',
+    supportsAllDrives: true,
   });
 
   return created.data.id!;
@@ -53,6 +56,8 @@ async function getNextSequence(monthFolderId: string): Promise<number> {
     fields: 'files(name)',
     spaces: 'drive',
     orderBy: 'name',
+    includeItemsFromAllDrives: true,
+    supportsAllDrives: true,
   });
 
   const folders = res.data.files ?? [];
@@ -81,6 +86,7 @@ async function uploadFile(
     },
     media: { mimeType, body: stream },
     fields: 'id, webViewLink',
+    supportsAllDrives: true,
   });
 
   return {

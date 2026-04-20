@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import type { Meeting } from '@/types';
 
@@ -15,6 +16,7 @@ function formatAmt(n: number) {
 const inputCls = 'w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300';
 
 export default function MeetingDetailClient({ meeting }: { meeting: Meeting }) {
+  const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -118,12 +120,25 @@ export default function MeetingDetailClient({ meeting }: { meeting: Meeting }) {
               </button>
             </>
           ) : (
-            <button
-              onClick={() => setEditing(true)}
-              className="border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 px-3 py-2 rounded-lg transition-colors"
-            >
-              ✏️ 수정
-            </button>
+            <>
+              <button
+                onClick={() => setEditing(true)}
+                className="border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 px-3 py-2 rounded-lg transition-colors"
+              >
+                ✏️ 수정
+              </button>
+              <button
+                onClick={async () => {
+                  if (!confirm('이 회의록을 삭제하시겠습니까?')) return;
+                  const res = await fetch(`/api/meetings/${meeting.id}`, { method: 'DELETE' });
+                  if (res.ok) router.push('/meetings');
+                  else alert('삭제 실패');
+                }}
+                className="border border-red-200 text-sm text-red-500 hover:bg-red-50 px-3 py-2 rounded-lg transition-colors"
+              >
+                🗑️ 삭제
+              </button>
+            </>
           )}
         </div>
       </div>

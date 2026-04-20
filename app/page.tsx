@@ -4,6 +4,8 @@ import { supabaseAdmin } from '@/lib/supabase';
 import Link from 'next/link';
 import type { Meeting } from '@/types';
 
+export const dynamic = 'force-dynamic';
+
 function formatDate(dateStr: string) {
   const d = new Date(dateStr);
   return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
