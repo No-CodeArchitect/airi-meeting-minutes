@@ -126,6 +126,7 @@ export async function uploadMeetingFiles(params: {
   storeName: string;     // 가맹점 전체명
   startTime: string;     // HH:MM
   handler: string;
+  cardLast4: string;     // 카드 끝 4자리
   receiptBuffer: Buffer;
   receiptMime: string;
   receiptExt: string;    // jpg / png / pdf
@@ -138,13 +139,17 @@ export async function uploadMeetingFiles(params: {
   const monthFolderName = `${year}년 ${String(month).padStart(2, '0')}월`;
   const monthFolderId = await findOrCreateFolder(monthFolderName, ROOT_FOLDER_ID);
 
-  // 2️⃣  시퀀스 번호 결정
-  const seq = await getNextSequence(monthFolderId);
+  // 2️⃣  카드 폴더: "1558"
+  const cardFolderName = params.cardLast4 || '기타';
+  const cardFolderId = await findOrCreateFolder(cardFolderName, monthFolderId);
+
+  // 3️⃣  시퀀스 번호 결정 (카드 폴더 내 기준)
+  const seq = await getNextSequence(cardFolderId);
   const seqStr = String(seq).padStart(2, '0');
 
-  // 3️⃣  날짜 폴더: "01. 4.1 순천만갯벌낙지"
+  // 4️⃣  날짜 폴더: "01. 4.1 순천만갯벌낙지"
   const dateFolderName = `${seqStr}. ${month}.${day} ${params.storeName}`;
-  const dateFolderId = await findOrCreateFolder(dateFolderName, monthFolderId);
+  const dateFolderId = await findOrCreateFolder(dateFolderName, cardFolderId);
 
   // 4️⃣  파일명 접미사
   const dateSuffix = `${String(year).slice(2)}${String(month).padStart(2, '0')}${String(day).padStart(2, '0')}`;

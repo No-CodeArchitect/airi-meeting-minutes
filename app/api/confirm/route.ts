@@ -81,6 +81,7 @@ export async function POST(req: NextRequest) {
           storeName:     body.storeFullName,
           startTime:     body.startTime ?? '0000',
           handler:       body.handler   ?? 'unknown',
+          cardLast4:     body.cardLast4 ?? '기타',
           receiptBuffer: receiptBuf,
           receiptMime:   receiptFile.type,
           receiptExt,
