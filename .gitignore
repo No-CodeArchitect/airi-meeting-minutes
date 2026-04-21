@@ -39,5 +39,4 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# fonts (대용량 - scripts/download-fonts.sh로 별도 다운로드)
-/public/fonts/*.ttf
+# fonts - Vercel 배포를 위해 포함
