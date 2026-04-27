@@ -298,10 +298,11 @@ export default function NewPage() {
   const [mode, setMode] = useState<Mode>('new');
 
   // 영수증 추가 모드
-  const [addReceipt, setAddReceipt]         = useState<File | null>(null);
+  const [addReceipt, setAddReceipt]           = useState<File | null>(null);
+  const [addStoreName, setAddStoreName]       = useState('');
   const [selectedMeeting, setSelectedMeeting] = useState<MeetingSummary | null>(null);
-  const [addSubmitting, setAddSubmitting]   = useState(false);
-  const [addResult, setAddResult]           = useState<string | null>(null);
+  const [addSubmitting, setAddSubmitting]     = useState(false);
+  const [addResult, setAddResult]             = useState<string | null>(null);
 
   const canParse = receipt && approval;
 
@@ -359,13 +360,14 @@ export default function NewPage() {
   };
 
   const handleAddReceipt = async () => {
-    if (!addReceipt || !selectedMeeting) return;
+    if (!addReceipt || !selectedMeeting || !addStoreName.trim()) return;
     setAddSubmitting(true);
     setError('');
 
     try {
       const fd = new FormData();
       fd.append('meetingId', selectedMeeting.id);
+      fd.append('storeName', addStoreName.trim());
       fd.append('receipt',   addReceipt);
 
       const res = await fetch('/api/add-receipt', { method: 'POST', body: fd });
@@ -500,6 +502,7 @@ export default function NewPage() {
                   onClick={() => {
                     setAddResult(null);
                     setAddReceipt(null);
+                    setAddStoreName('');
                     setSelectedMeeting(null);
                   }}
                   className="text-xs text-gray-500 underline"
@@ -521,9 +524,21 @@ export default function NewPage() {
                 />
               </div>
 
+              {/* 가맹점명 입력 */}
+              <div>
+                <p className="text-xs font-semibold text-gray-600 mb-2">② 가맹점명 (폴더명에 사용)</p>
+                <input
+                  type="text"
+                  placeholder="예: 디에떼에스프레소 카이스트문지점"
+                  value={addStoreName}
+                  onChange={(e) => setAddStoreName(e.target.value)}
+                  className={inputCls}
+                />
+              </div>
+
               {/* 기존 회의록 선택 */}
               <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-3">
-                <p className="text-xs font-semibold text-gray-600">② 연결할 기존 회의록</p>
+                <p className="text-xs font-semibold text-gray-600">③ 연결할 기존 회의록</p>
                 <MeetingPicker selected={selectedMeeting} onSelect={setSelectedMeeting} />
                 {selectedMeeting && (
                   <div className="bg-blue-50 rounded-lg px-4 py-3 text-xs text-blue-800">
@@ -535,7 +550,7 @@ export default function NewPage() {
 
               <button
                 onClick={handleAddReceipt}
-                disabled={!addReceipt || !selectedMeeting || addSubmitting}
+                disabled={!addReceipt || !addStoreName.trim() || !selectedMeeting || addSubmitting}
                 className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-sm transition-colors"
               >
                 {addSubmitting ? 'Drive 업로드 중...' : '📁 Drive 폴더 생성'}

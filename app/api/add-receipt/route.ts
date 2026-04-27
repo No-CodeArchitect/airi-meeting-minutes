@@ -12,10 +12,11 @@ export async function POST(req: NextRequest) {
 
   try {
     const formData = await req.formData();
-    const meetingId  = formData.get('meetingId') as string;
+    const meetingId   = formData.get('meetingId') as string;
+    const storeName   = formData.get('storeName') as string;
     const receiptFile = formData.get('receipt') as File | null;
 
-    if (!meetingId || !receiptFile) {
+    if (!meetingId || !storeName || !receiptFile) {
       return NextResponse.json({ error: '필수 데이터 누락' }, { status: 400 });
     }
 
@@ -38,7 +39,7 @@ export async function POST(req: NextRequest) {
 
     const result = await addReceiptToExistingMeeting({
       date:               meeting.date,
-      storeName:          meeting.store_name,
+      storeName:          storeName,
       startTime:          meeting.start_time ?? '0000',
       handler:            meeting.handler    ?? 'unknown',
       cardLast4:          meeting.card_last4 ?? '기타',
