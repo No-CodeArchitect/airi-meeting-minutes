@@ -148,7 +148,7 @@ export async function parseApprovalDoc(fileBase64: string): Promise<ApprovalInfo
         ],
       },
     ],
-    600,
+    1200,
   );
 
   return result as unknown as ApprovalInfo;
