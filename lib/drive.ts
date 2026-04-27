@@ -110,6 +110,22 @@ function parseDate(dateStr: string): { year: number; month: number; day: number 
   };
 }
 
+// ── 파일 복사 ─────────────────────────────────────────────
+async function copyFile(
+  fileId: string,
+  parentId: string,
+  fileName: string,
+): Promise<{ id: string; webViewLink: string }> {
+  const drive = getDrive();
+  const res = await drive.files.copy({
+    fileId,
+    requestBody: { name: fileName, parents: [parentId] },
+    fields: 'id, webViewLink',
+    supportsAllDrives: true,
+  });
+  return { id: res.data.id!, webViewLink: res.data.webViewLink! };
+}
+
 // ── 공개 API ───────────────────────────────────────────────
 export interface DriveUploadResult {
   folderId: string;
@@ -185,5 +201,59 @@ export async function uploadMeetingFiles(params: {
     approvalDocDriveId: approval.id,
     pdfDriveId: pdf.id,
     pdfUrl: pdf.webViewLink,
+  };
+}
+
+// ── 기존 회의록에 영수증만 추가 ───────────────────────────
+export interface AddReceiptResult {
+  folderId: string;
+  folderUrl: string;
+  receiptDriveId: string;
+}
+
+export async function addReceiptToExistingMeeting(params: {
+  date: string;
+  storeName: string;
+  startTime: string;
+  handler: string;
+  cardLast4: string;
+  receiptBuffer: Buffer;
+  receiptMime: string;
+  receiptExt: string;
+  approvalDocDriveId: string;
+  pdfDriveId: string;
+}): Promise<AddReceiptResult> {
+  const { year, month, day } = parseDate(params.date);
+
+  const monthFolderName = `${year}년 ${String(month).padStart(2, '0')}월`;
+  const monthFolderId = await findOrCreateFolder(monthFolderName, ROOT_FOLDER_ID);
+
+  const cardFolderName = params.cardLast4 || '기타';
+  const cardFolderId = await findOrCreateFolder(cardFolderName, monthFolderId);
+
+  const seq = await getNextSequence(cardFolderId);
+  const seqStr = String(seq).padStart(2, '0');
+
+  const dateFolderName = `${seqStr}. ${month}.${day} ${params.storeName}`;
+  const dateFolderId = await findOrCreateFolder(dateFolderName, cardFolderId);
+
+  const dateSuffix = `${String(year).slice(2)}${String(month).padStart(2, '0')}${String(day).padStart(2, '0')}`;
+  const timeSuffix = (params.startTime ?? '0000').replace(':', '');
+
+  const [receipt] = await Promise.all([
+    uploadFile(
+      dateFolderId,
+      `영수증_${dateSuffix}.${params.receiptExt}`,
+      params.receiptMime,
+      params.receiptBuffer,
+    ),
+    copyFile(params.approvalDocDriveId, dateFolderId, `회의비품의서_${dateSuffix}.pdf`),
+    copyFile(params.pdfDriveId, dateFolderId, `회의록_${dateSuffix}_${params.handler}_${timeSuffix}.pdf`),
+  ]);
+
+  return {
+    folderId: dateFolderId,
+    folderUrl: folderUrl(dateFolderId),
+    receiptDriveId: receipt.id,
   };
 }

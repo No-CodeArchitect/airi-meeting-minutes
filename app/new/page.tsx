@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import type { ParsedData } from '@/types';
 
 // ── 단계 타입 ──────────────────────────────────────────────
 type Stage = 'upload' | 'parsing' | 'editing' | 'confirming' | 'done';
+type Mode  = 'new' | 'add-receipt';
 
 // ── 파일 업로드 구역 ───────────────────────────────────────
 function FileZone({
@@ -193,6 +194,83 @@ function MinutesEditor({
   );
 }
 
+// ── 기존 회의 선택기 ───────────────────────────────────────
+type MeetingSummary = {
+  id: string;
+  date: string;
+  start_time: string | null;
+  topic: string;
+  store_name: string;
+  handler: string | null;
+};
+
+function MeetingPicker({
+  selected,
+  onSelect,
+}: {
+  selected: MeetingSummary | null;
+  onSelect: (m: MeetingSummary) => void;
+}) {
+  const [meetings, setMeetings] = useState<MeetingSummary[]>([]);
+  const [query, setQuery] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/meetings')
+      .then((r) => r.json())
+      .then((j) => setMeetings(j.meetings ?? []))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const filtered = meetings.filter((m) => {
+    if (!query) return true;
+    const q = query.toLowerCase();
+    return (
+      m.topic.toLowerCase().includes(q) ||
+      m.store_name.toLowerCase().includes(q) ||
+      m.date.includes(q) ||
+      (m.handler ?? '').toLowerCase().includes(q)
+    );
+  });
+
+  return (
+    <div className="space-y-2">
+      <input
+        type="text"
+        placeholder="주제, 가맹점, 날짜, 담당자로 검색..."
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        className={inputCls}
+      />
+      {loading ? (
+        <p className="text-xs text-gray-400 text-center py-4">불러오는 중...</p>
+      ) : (
+        <div className="max-h-64 overflow-y-auto rounded-lg border border-gray-200 divide-y divide-gray-100">
+          {filtered.length === 0 ? (
+            <p className="text-xs text-gray-400 text-center py-4">검색 결과 없음</p>
+          ) : (
+            filtered.map((m) => (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => onSelect(m)}
+                className={`w-full text-left px-4 py-3 text-sm transition-colors hover:bg-blue-50 ${
+                  selected?.id === m.id ? 'bg-blue-50 border-l-2 border-blue-500' : 'bg-white'
+                }`}
+              >
+                <span className="font-medium text-gray-800">{m.topic}</span>
+                <span className="ml-2 text-xs text-gray-400">
+                  {m.date} · {m.store_name} · {m.handler ?? '-'}
+                </span>
+              </button>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const inputCls =
   'w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-300';
 
@@ -208,11 +286,22 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 // ── 메인 페이지 ────────────────────────────────────────────
 export default function NewPage() {
   const router = useRouter();
-  const [stage, setStage] = useState<Stage>('upload');
+
+  // 신규 회의록 모드
+  const [stage, setStage]     = useState<Stage>('upload');
   const [receipt, setReceipt] = useState<File | null>(null);
   const [approval, setApproval] = useState<File | null>(null);
-  const [parsed, setParsed] = useState<ParsedData | null>(null);
-  const [error, setError] = useState('');
+  const [parsed, setParsed]   = useState<ParsedData | null>(null);
+  const [error, setError]     = useState('');
+
+  // 모드 전환
+  const [mode, setMode] = useState<Mode>('new');
+
+  // 영수증 추가 모드
+  const [addReceipt, setAddReceipt]         = useState<File | null>(null);
+  const [selectedMeeting, setSelectedMeeting] = useState<MeetingSummary | null>(null);
+  const [addSubmitting, setAddSubmitting]   = useState(false);
+  const [addResult, setAddResult]           = useState<string | null>(null);
 
   const canParse = receipt && approval;
 
@@ -242,7 +331,6 @@ export default function NewPage() {
     setError('');
 
     try {
-      // FormData로 전송 — 원본 파일도 함께 보내 Drive 업로드에 사용
       const fd = new FormData();
       fd.append('date',           data.approval.date);
       fd.append('startTime',      data.approval.startTime);
@@ -270,10 +358,60 @@ export default function NewPage() {
     }
   };
 
+  const handleAddReceipt = async () => {
+    if (!addReceipt || !selectedMeeting) return;
+    setAddSubmitting(true);
+    setError('');
+
+    try {
+      const fd = new FormData();
+      fd.append('meetingId', selectedMeeting.id);
+      fd.append('receipt',   addReceipt);
+
+      const res = await fetch('/api/add-receipt', { method: 'POST', body: fd });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? '업로드 실패');
+      setAddResult(json.folderUrl);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '오류가 발생했습니다.');
+    } finally {
+      setAddSubmitting(false);
+    }
+  };
+
+  const switchMode = (m: Mode) => {
+    setMode(m);
+    setError('');
+    setAddResult(null);
+  };
+
   return (
     <div className="p-8 max-w-3xl mx-auto">
       <h2 className="text-2xl font-bold text-gray-900 mb-1">신규 등록</h2>
-      <p className="text-sm text-gray-500 mb-8">영수증과 사전 품의서를 업로드하면 회의록 초안을 자동 생성합니다.</p>
+
+      {/* ── 모드 탭 ── */}
+      <div className="flex gap-2 mb-6 mt-4">
+        <button
+          onClick={() => switchMode('new')}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            mode === 'new'
+              ? 'bg-blue-600 text-white'
+              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+          }`}
+        >
+          신규 회의록 등록
+        </button>
+        <button
+          onClick={() => switchMode('add-receipt')}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            mode === 'add-receipt'
+              ? 'bg-blue-600 text-white'
+              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+          }`}
+        >
+          기존 회의록에 영수증 추가
+        </button>
+      </div>
 
       {error && (
         <div className="mb-6 bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm">
@@ -281,56 +419,130 @@ export default function NewPage() {
         </div>
       )}
 
-      {/* ── 업로드 단계 ── */}
-      {(stage === 'upload') && (
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <p className="text-xs font-semibold text-gray-600 mb-2">① 영수증</p>
-              <FileZone
-                label="비즈플레이 영수증"
-                accept="image/*,application/pdf"
-                file={receipt}
-                onFile={setReceipt}
-              />
+      {/* ══════ 신규 회의록 모드 ══════ */}
+      {mode === 'new' && (
+        <>
+          <p className="text-sm text-gray-500 mb-6">영수증과 사전 품의서를 업로드하면 회의록 초안을 자동 생성합니다.</p>
+
+          {stage === 'upload' && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs font-semibold text-gray-600 mb-2">① 영수증</p>
+                  <FileZone
+                    label="비즈플레이 영수증"
+                    accept="image/*,application/pdf"
+                    file={receipt}
+                    onFile={setReceipt}
+                  />
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-gray-600 mb-2">② 사전 품의서</p>
+                  <FileZone
+                    label="사전 품의서 PDF"
+                    accept="application/pdf"
+                    file={approval}
+                    onFile={setApproval}
+                  />
+                </div>
+              </div>
+              <button
+                onClick={handleParse}
+                disabled={!canParse}
+                className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-sm transition-colors mt-2"
+              >
+                🤖 AI로 파싱 + 회의록 초안 생성
+              </button>
             </div>
-            <div>
-              <p className="text-xs font-semibold text-gray-600 mb-2">② 사전 품의서</p>
-              <FileZone
-                label="사전 품의서 PDF"
-                accept="application/pdf"
-                file={approval}
-                onFile={setApproval}
-              />
+          )}
+
+          {stage === 'parsing' && (
+            <div className="bg-white rounded-xl border border-gray-200 p-16 text-center">
+              <div className="text-4xl mb-4 animate-spin">⚙️</div>
+              <p className="text-sm font-semibold text-gray-700 mb-2">Claude AI가 분석 중입니다...</p>
+              <p className="text-xs text-gray-400">영수증 파싱 → 품의서 파싱 → 회의록 초안 생성</p>
+              <p className="text-xs text-gray-400 mt-1">약 20~30초 소요됩니다.</p>
             </div>
-          </div>
-          <button
-            onClick={handleParse}
-            disabled={!canParse}
-            className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-sm transition-colors mt-2"
-          >
-            🤖 AI로 파싱 + 회의록 초안 생성
-          </button>
-        </div>
+          )}
+
+          {(stage === 'editing' || stage === 'confirming') && parsed && (
+            <MinutesEditor
+              data={parsed}
+              onConfirm={handleConfirm}
+              confirming={stage === 'confirming'}
+            />
+          )}
+        </>
       )}
 
-      {/* ── 파싱 중 ── */}
-      {stage === 'parsing' && (
-        <div className="bg-white rounded-xl border border-gray-200 p-16 text-center">
-          <div className="text-4xl mb-4 animate-spin">⚙️</div>
-          <p className="text-sm font-semibold text-gray-700 mb-2">Claude AI가 분석 중입니다...</p>
-          <p className="text-xs text-gray-400">영수증 파싱 → 품의서 파싱 → 회의록 초안 생성</p>
-          <p className="text-xs text-gray-400 mt-1">약 20~30초 소요됩니다.</p>
-        </div>
-      )}
+      {/* ══════ 영수증 추가 모드 ══════ */}
+      {mode === 'add-receipt' && (
+        <div className="space-y-6">
+          <p className="text-sm text-gray-500">
+            기존 회의록의 회의비품의서·회의록 PDF를 그대로 복사하여 새 영수증 폴더를 Drive에 생성합니다.
+            회의록 내용은 재생성되지 않습니다.
+          </p>
 
-      {/* ── 편집 단계 ── */}
-      {(stage === 'editing' || stage === 'confirming') && parsed && (
-        <MinutesEditor
-          data={parsed}
-          onConfirm={handleConfirm}
-          confirming={stage === 'confirming'}
-        />
+          {addResult ? (
+            <div className="bg-green-50 border border-green-200 rounded-xl p-6 text-center space-y-3">
+              <p className="text-2xl">✅</p>
+              <p className="text-sm font-semibold text-green-800">Drive 폴더 생성 완료</p>
+              <a
+                href={addResult}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block text-sm text-blue-600 underline"
+              >
+                Drive 폴더 열기
+              </a>
+              <div className="pt-2">
+                <button
+                  onClick={() => {
+                    setAddResult(null);
+                    setAddReceipt(null);
+                    setSelectedMeeting(null);
+                  }}
+                  className="text-xs text-gray-500 underline"
+                >
+                  다른 영수증 추가
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* 영수증 업로드 */}
+              <div>
+                <p className="text-xs font-semibold text-gray-600 mb-2">① 새 영수증</p>
+                <FileZone
+                  label="비즈플레이 영수증"
+                  accept="image/*,application/pdf"
+                  file={addReceipt}
+                  onFile={setAddReceipt}
+                />
+              </div>
+
+              {/* 기존 회의록 선택 */}
+              <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-3">
+                <p className="text-xs font-semibold text-gray-600">② 연결할 기존 회의록</p>
+                <MeetingPicker selected={selectedMeeting} onSelect={setSelectedMeeting} />
+                {selectedMeeting && (
+                  <div className="bg-blue-50 rounded-lg px-4 py-3 text-xs text-blue-800">
+                    선택됨: <span className="font-semibold">{selectedMeeting.topic}</span>
+                    {' '}— {selectedMeeting.date} · {selectedMeeting.store_name}
+                  </div>
+                )}
+              </div>
+
+              <button
+                onClick={handleAddReceipt}
+                disabled={!addReceipt || !selectedMeeting || addSubmitting}
+                className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-sm transition-colors"
+              >
+                {addSubmitting ? 'Drive 업로드 중...' : '📁 Drive 폴더 생성'}
+              </button>
+            </>
+          )}
+        </div>
       )}
     </div>
   );
