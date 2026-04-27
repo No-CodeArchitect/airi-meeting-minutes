@@ -300,11 +300,30 @@ export default function NewPage() {
   // 영수증 추가 모드
   const [addReceipt, setAddReceipt]           = useState<File | null>(null);
   const [addStoreName, setAddStoreName]       = useState('');
+  const [addParsing, setAddParsing]           = useState(false);
   const [selectedMeeting, setSelectedMeeting] = useState<MeetingSummary | null>(null);
   const [addSubmitting, setAddSubmitting]     = useState(false);
   const [addResult, setAddResult]             = useState<string | null>(null);
 
   const canParse = receipt && approval;
+
+  const handleAddReceiptFile = async (file: File) => {
+    setAddReceipt(file);
+    setAddStoreName('');
+    setAddParsing(true);
+    try {
+      const fd = new FormData();
+      fd.append('receipt', file);
+      const res = await fetch('/api/parse-receipt', { method: 'POST', body: fd });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? '파싱 실패');
+      setAddStoreName(json.storeName ?? '');
+    } catch {
+      setAddStoreName('');
+    } finally {
+      setAddParsing(false);
+    }
+  };
 
   const handleParse = async () => {
     if (!receipt || !approval) return;
@@ -503,6 +522,7 @@ export default function NewPage() {
                     setAddResult(null);
                     setAddReceipt(null);
                     setAddStoreName('');
+                    setAddParsing(false);
                     setSelectedMeeting(null);
                   }}
                   className="text-xs text-gray-500 underline"
@@ -520,20 +540,19 @@ export default function NewPage() {
                   label="비즈플레이 영수증"
                   accept="image/*,application/pdf"
                   file={addReceipt}
-                  onFile={setAddReceipt}
+                  onFile={handleAddReceiptFile}
                 />
-              </div>
-
-              {/* 가맹점명 입력 */}
-              <div>
-                <p className="text-xs font-semibold text-gray-600 mb-2">② 가맹점명 (폴더명에 사용)</p>
-                <input
-                  type="text"
-                  placeholder="예: 디에떼에스프레소 카이스트문지점"
-                  value={addStoreName}
-                  onChange={(e) => setAddStoreName(e.target.value)}
-                  className={inputCls}
-                />
+                {addParsing && (
+                  <p className="text-xs text-blue-500 mt-2">⚙️ 가맹점명 추출 중...</p>
+                )}
+                {!addParsing && addStoreName && (
+                  <p className="text-xs text-green-700 mt-2 font-medium">
+                    ✅ 가맹점명: {addStoreName}
+                  </p>
+                )}
+                {!addParsing && addReceipt && !addStoreName && (
+                  <p className="text-xs text-red-500 mt-2">⚠️ 가맹점명 추출 실패 — 영수증을 다시 업로드해 주세요.</p>
+                )}
               </div>
 
               {/* 기존 회의록 선택 */}
@@ -550,7 +569,7 @@ export default function NewPage() {
 
               <button
                 onClick={handleAddReceipt}
-                disabled={!addReceipt || !addStoreName.trim() || !selectedMeeting || addSubmitting}
+                disabled={!addReceipt || !addStoreName || addParsing || !selectedMeeting || addSubmitting}
                 className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-sm transition-colors"
               >
                 {addSubmitting ? 'Drive 업로드 중...' : '📁 Drive 폴더 생성'}
