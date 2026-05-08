@@ -109,27 +109,6 @@ const S = StyleSheet.create({
     paddingVertical: 5,
     justifyContent: 'center',
   },
-  // 참석자 열
-  attendeeHeader: {
-    backgroundColor: LABEL_BG,
-    fontWeight: 'bold',
-    fontSize: 9,
-    width: 68,
-    borderLeftWidth: BORDER,
-    borderColor: BORDER_C,
-    paddingHorizontal: 4,
-    paddingVertical: 5,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  attendeeBody: {
-    width: 68,
-    borderLeftWidth: BORDER,
-    borderColor: BORDER_C,
-    paddingHorizontal: 4,
-    paddingVertical: 3,
-    justifyContent: 'center',
-  },
   // 회의내용 / 향후일정
   sectionLabelRow: {
     flexDirection: 'row',
@@ -266,48 +245,40 @@ function MeetingDocument({ meeting }: { meeting: Meeting }) {
           <Text style={S.titleText}>회  의  록</Text>
         </View>
 
-        {/* ── 상단 메타 테이블: 좌(사업명~장소) + 우(참석자) 나란히 ── */}
-        <View style={{ flexDirection: 'row', borderWidth: BORDER, borderColor: BORDER_C }}>
-
-          {/* 좌측: 5개 행 */}
-          <View style={{ flex: 1 }}>
-            {/* 사업명 */}
-            <View style={{ flexDirection: 'row', borderBottomWidth: BORDER, borderColor: BORDER_C }}>
-              <View style={[S.labelCell, { borderRightWidth: BORDER, borderColor: BORDER_C }]}><Text>사업명</Text></View>
-              <View style={S.valueCell}><Text>{BIZ_NAME}</Text></View>
-            </View>
-            {/* 과제번호 */}
-            <View style={{ flexDirection: 'row', borderBottomWidth: BORDER, borderColor: BORDER_C }}>
-              <View style={[S.labelCell, { borderRightWidth: BORDER, borderColor: BORDER_C }]}><Text>과제번호</Text></View>
-              <View style={S.valueCell}><Text>{PROJ_NO}</Text></View>
-            </View>
-            {/* 과제명 */}
-            <View style={{ flexDirection: 'row', borderBottomWidth: BORDER, borderColor: BORDER_C }}>
-              <View style={[S.labelCell, { borderRightWidth: BORDER, borderColor: BORDER_C }]}><Text>과제명</Text></View>
-              <View style={S.valueCell}><Text>{PROJ_NAME}</Text></View>
-            </View>
-            {/* 일시 */}
-            <View style={{ flexDirection: 'row', borderBottomWidth: BORDER, borderColor: BORDER_C }}>
-              <View style={[S.labelCell, { borderRightWidth: BORDER, borderColor: BORDER_C }]}><Text>일  시</Text></View>
-              <View style={S.valueCell}><Text>{dateTime}</Text></View>
-            </View>
-            {/* 장소 */}
-            <View style={{ flexDirection: 'row' }}>
-              <View style={[S.labelCell, { borderRightWidth: BORDER, borderColor: BORDER_C }]}><Text>장  소</Text></View>
-              <View style={S.valueCell}><Text>{meeting.place ?? ''}</Text></View>
+        {/* ── 상단 메타 테이블: 사업명~장소 ── */}
+        <View style={{ borderWidth: BORDER, borderColor: BORDER_C }}>
+          {/* 사업명 */}
+          <View style={{ flexDirection: 'row', borderBottomWidth: BORDER, borderColor: BORDER_C }}>
+            <View style={[S.labelCell, { borderRightWidth: BORDER, borderColor: BORDER_C }]}><Text>사업명</Text></View>
+            <View style={S.valueCell}><Text>{BIZ_NAME}</Text></View>
+          </View>
+          {/* 과제번호 */}
+          <View style={{ flexDirection: 'row', borderBottomWidth: BORDER, borderColor: BORDER_C }}>
+            <View style={[S.labelCell, { borderRightWidth: BORDER, borderColor: BORDER_C }]}><Text>과제번호</Text></View>
+            <View style={S.valueCell}><Text>{PROJ_NO}</Text></View>
+          </View>
+          {/* 과제명 */}
+          <View style={{ flexDirection: 'row', borderBottomWidth: BORDER, borderColor: BORDER_C }}>
+            <View style={[S.labelCell, { borderRightWidth: BORDER, borderColor: BORDER_C }]}><Text>과제명</Text></View>
+            <View style={S.valueCell}><Text>{PROJ_NAME}</Text></View>
+          </View>
+          {/* 일시 */}
+          <View style={{ flexDirection: 'row', borderBottomWidth: BORDER, borderColor: BORDER_C }}>
+            <View style={[S.labelCell, { borderRightWidth: BORDER, borderColor: BORDER_C }]}><Text>일  시</Text></View>
+            <View style={S.valueCell}><Text>{dateTime}</Text></View>
+          </View>
+          {/* 장소 */}
+          <View style={{ flexDirection: 'row', borderBottomWidth: BORDER, borderColor: BORDER_C }}>
+            <View style={[S.labelCell, { borderRightWidth: BORDER, borderColor: BORDER_C }]}><Text>장  소</Text></View>
+            <View style={S.valueCell}><Text>{meeting.place ?? ''}</Text></View>
+          </View>
+          {/* 참석자 — 전체 폭, 내용만큼 자동 확장 */}
+          <View style={{ flexDirection: 'row' }}>
+            <View style={[S.labelCell, { borderRightWidth: BORDER, borderColor: BORDER_C }]}><Text>참석자</Text></View>
+            <View style={{ flex: 1, paddingHorizontal: 8, paddingVertical: 5 }}>
+              <Text style={{ fontSize: 9, lineHeight: 1.7 }}>{attendeeText}</Text>
             </View>
           </View>
-
-          {/* 우측: 참석자 단일 셀 */}
-          <View style={{ width: 90, borderLeftWidth: BORDER, borderColor: BORDER_C }}>
-            <View style={{ backgroundColor: LABEL_BG, borderBottomWidth: BORDER, borderColor: BORDER_C, paddingVertical: 4, alignItems: 'center' }}>
-              <Text style={{ fontWeight: 'bold', fontSize: 9 }}>참  석  자</Text>
-            </View>
-            <View style={{ flex: 1, padding: 6 }}>
-              <Text style={{ fontSize: 8, lineHeight: 1.7 }}>{attendeeText}</Text>
-            </View>
-          </View>
-
         </View>
 
         {/* ── 회의 내용 ── */}
