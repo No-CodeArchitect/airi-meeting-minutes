@@ -1,11 +1,10 @@
-import Anthropic from '@anthropic-ai/sdk';
+import { GoogleGenerativeAI, Part } from '@google/generative-ai';
 import { SYSTEM_CONTEXT } from './claude-context';
 
-// 모듈 로드 시점이 아닌 함수 호출 시점에 env를 읽도록 lazy 초기화
 function getClient() {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new Error('ANTHROPIC_API_KEY 환경변수가 설정되지 않았습니다.');
-  return new Anthropic({ apiKey });
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error('GEMINI_API_KEY 환경변수가 설정되지 않았습니다.');
+  return new GoogleGenerativeAI(apiKey);
 }
 
 // ─── 공통 타입 ────────────────────────────────────────────────
@@ -35,43 +34,38 @@ export interface RecentMeeting {
   place: string;
 }
 
-// ─── 내부 헬퍼 ────────────────────────────────────────────────
-async function callClaudeJSON(
-  messages: Anthropic.MessageParam[],
+// ─── 내부 헬퍼: JSON 응답 ─────────────────────────────────────
+async function callGeminiJSON(
+  parts: Part[],
   maxTokens: number,
 ): Promise<Record<string, unknown>> {
-  const response = await getClient().messages.create({
-    model: 'claude-opus-4-5',
-    max_tokens: maxTokens,
-    messages,
+  const model = getClient().getGenerativeModel({
+    model: 'gemini-1.5-flash',
+    generationConfig: { maxOutputTokens: maxTokens },
   });
 
-  const text = response.content
-    .filter((b): b is Anthropic.TextBlock => b.type === 'text')
-    .map((b) => b.text)
-    .join('');
+  const result = await model.generateContent(parts);
+  const text = result.response.text();
 
   // ```json ... ``` 펜스 제거 후 파싱
   const cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
   return JSON.parse(cleaned);
 }
 
-async function callClaudeText(
-  messages: Anthropic.MessageParam[],
-  system: string,
+// ─── 내부 헬퍼: 텍스트 응답 ──────────────────────────────────
+async function callGeminiText(
+  systemPrompt: string,
+  userPrompt: string,
   maxTokens: number,
 ): Promise<string> {
-  const response = await getClient().messages.create({
-    model: 'claude-opus-4-5',
-    max_tokens: maxTokens,
-    system,
-    messages,
+  const model = getClient().getGenerativeModel({
+    model: 'gemini-1.5-pro',
+    systemInstruction: systemPrompt,
+    generationConfig: { maxOutputTokens: maxTokens },
   });
 
-  return response.content
-    .filter((b): b is Anthropic.TextBlock => b.type === 'text')
-    .map((b) => b.text)
-    .join('');
+  const result = await model.generateContent(userPrompt);
+  return result.response.text();
 }
 
 // ─── 1. 영수증 파싱 ───────────────────────────────────────────
@@ -79,21 +73,13 @@ export async function parseReceipt(
   fileBase64: string,
   mimeType: string,
 ): Promise<ReceiptInfo> {
-  const isPdf = mimeType === 'application/pdf';
-
-  const fileBlock = isPdf
-    ? ({
-        type: 'document',
-        source: { type: 'base64', media_type: 'application/pdf', data: fileBase64 },
-      } as const)
-    : ({
-        type: 'image',
-        source: {
-          type: 'base64',
-          media_type: mimeType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
-          data: fileBase64,
-        },
-      } as const);
+  // Gemini는 PDF도 inlineData로 처리
+  const filePart: Part = {
+    inlineData: {
+      mimeType: mimeType as string,
+      data: fileBase64,
+    },
+  };
 
   const prompt = `이 비즈플레이 법인카드 영수증에서 다음 정보를 추출하여 JSON으로만 응답하세요.
 다른 텍스트 없이 JSON만 출력하세요.
@@ -109,16 +95,19 @@ export async function parseReceipt(
 
 날짜나 시각이 명확하지 않으면 null로 표기하세요.`;
 
-  const result = await callClaudeJSON(
-    [{ role: 'user', content: [fileBlock as never, { type: 'text', text: prompt }] }],
-    400,
-  );
-
+  const result = await callGeminiJSON([filePart, { text: prompt }], 400);
   return result as unknown as ReceiptInfo;
 }
 
 // ─── 2. 사전 품의서 파싱 ──────────────────────────────────────
 export async function parseApprovalDoc(fileBase64: string): Promise<ApprovalInfo> {
+  const filePart: Part = {
+    inlineData: {
+      mimeType: 'application/pdf',
+      data: fileBase64,
+    },
+  };
+
   const prompt = `이 사전품의서(회의비 품의서) PDF에서 다음 정보를 추출하여 JSON으로만 응답하세요.
 다른 텍스트 없이 JSON만 출력하세요.
 
@@ -135,22 +124,7 @@ export async function parseApprovalDoc(fileBase64: string): Promise<ApprovalInfo
 중요: attendees는 품의서에 기재된 모든 참석자를 개별 기재하세요.
 "임춘성 외 X명" 같은 축약 절대 금지. 소속은 "(기관명) 이름" 형식.`;
 
-  const result = await callClaudeJSON(
-    [
-      {
-        role: 'user',
-        content: [
-          {
-            type: 'document',
-            source: { type: 'base64', media_type: 'application/pdf', data: fileBase64 },
-          } as never,
-          { type: 'text', text: prompt },
-        ],
-      },
-    ],
-    1200,
-  );
-
+  const result = await callGeminiJSON([filePart, { text: prompt }], 1200);
   return result as unknown as ApprovalInfo;
 }
 
@@ -160,7 +134,6 @@ export async function generateMinutesContent(
   approvalInfo: ApprovalInfo,
   recentMeetings: RecentMeeting[],
 ): Promise<string> {
-  // 최근 회의 이력을 시스템 프롬프트에 동적 추가
   const recentContext =
     recentMeetings.length > 0
       ? `\n\n══════════════════════════════════════════
@@ -176,7 +149,6 @@ ${recentMeetings
 
   const systemPrompt = SYSTEM_CONTEXT + recentContext;
 
-  // 외부 기관 힌트
   const externalOrgs = approvalInfo.attendees
     .filter((a) => a.includes('(') && !a.includes('인공지능연구원'))
     .map((a) => a.match(/\(([^)]+)\)/)?.[1] ?? '')
@@ -205,5 +177,5 @@ ${orgHint}
 - 주제에서 벗어나거나 창작된 사실 절대 포함 금지
 - "회의 내용" 항목과 "향후 일정 및 요청 사항" 항목을 구분하여 출력`;
 
-  return callClaudeText([{ role: 'user', content: userPrompt }], systemPrompt, 1200);
+  return callGeminiText(systemPrompt, userPrompt, 1200);
 }
