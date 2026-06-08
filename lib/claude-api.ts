@@ -37,13 +37,14 @@ export interface RecentMeeting {
 // ─── 내부 헬퍼: JSON 응답 ─────────────────────────────────────
 async function callGeminiJSON(
   parts: Part[],
-  maxTokens: number,
 ): Promise<Record<string, unknown>> {
   const model = getClient().getGenerativeModel({
     model: 'gemini-2.5-flash',
     generationConfig: {
-      maxOutputTokens: maxTokens,
+      maxOutputTokens: 4096,
       responseMimeType: 'application/json',
+      // @ts-expect-error thinkingConfig is supported but not yet in type defs
+      thinkingConfig: { thinkingBudget: 0 }, // thinking 비활성화 (JSON 파싱엔 불필요)
     },
   });
 
@@ -56,12 +57,11 @@ async function callGeminiJSON(
 async function callGeminiText(
   systemPrompt: string,
   userPrompt: string,
-  maxTokens: number,
 ): Promise<string> {
   const model = getClient().getGenerativeModel({
     model: 'gemini-2.5-flash',
     systemInstruction: systemPrompt + '\n\n[필수] 마크다운 문법 절대 사용 금지. **, *, #, >, - 등 마크다운 기호 사용 금지. 오직 지정된 공문서 형식(ㅇ, - 들여쓰기)만 사용할 것.',
-    generationConfig: { maxOutputTokens: maxTokens },
+    generationConfig: { maxOutputTokens: 8192 },
   });
 
   const result = await model.generateContent(userPrompt);
@@ -95,7 +95,7 @@ export async function parseReceipt(
 
 날짜나 시각이 명확하지 않으면 null로 표기하세요.`;
 
-  const result = await callGeminiJSON([filePart, { text: prompt }], 400);
+  const result = await callGeminiJSON([filePart, { text: prompt }]);
   return result as unknown as ReceiptInfo;
 }
 
@@ -124,7 +124,7 @@ export async function parseApprovalDoc(fileBase64: string): Promise<ApprovalInfo
 중요: attendees는 품의서에 기재된 모든 참석자를 개별 기재하세요.
 "임춘성 외 X명" 같은 축약 절대 금지. 소속은 "(기관명) 이름" 형식.`;
 
-  const result = await callGeminiJSON([filePart, { text: prompt }], 1200);
+  const result = await callGeminiJSON([filePart, { text: prompt }]);
   return result as unknown as ApprovalInfo;
 }
 
@@ -177,5 +177,5 @@ ${orgHint}
 - 주제에서 벗어나거나 창작된 사실 절대 포함 금지
 - "회의 내용" 항목과 "향후 일정 및 요청 사항" 항목을 구분하여 출력`;
 
-  return callGeminiText(systemPrompt, userPrompt, 2500);
+  return callGeminiText(systemPrompt, userPrompt);
 }
