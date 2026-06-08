@@ -17,6 +17,12 @@ export interface ReceiptInfo {
   cardLast4: string;
 }
 
+export interface LectureItem {
+  time: string;    // "14:00~15:30"
+  title: string;   // "미래 국방 조직을 위한 AI 협업 전략"
+  instructor: string; // "KAIST 김주호 교수"
+}
+
 export interface ApprovalInfo {
   date: string;
   startTime: string;
@@ -25,6 +31,7 @@ export interface ApprovalInfo {
   topic: string;
   place: string;
   purpose: string;
+  lectures: LectureItem[]; // 강의 일정 (없으면 빈 배열)
 }
 
 export interface RecentMeeting {
@@ -117,12 +124,18 @@ export async function parseApprovalDoc(fileBase64: string): Promise<ApprovalInfo
   "endTime": "HH:MM",
   "attendees": ["(소속) 이름", ...],
   "topic": "회의 주제",
-  "place": "회의 장소",
-  "purpose": "회의 목적 한 줄 요약"
+  "place": "회의·교육 장소 (식사 장소 아님)",
+  "purpose": "회의 목적 한 줄 요약",
+  "lectures": [
+    { "time": "14:00~15:30", "title": "강의 제목", "instructor": "소속 강사명" },
+    ...
+  ]
 }
 
-중요: attendees는 품의서에 기재된 모든 참석자를 개별 기재하세요.
-"임춘성 외 X명" 같은 축약 절대 금지. 소속은 "(기관명) 이름" 형식.`;
+중요사항:
+- attendees는 품의서에 기재된 모든 참석자를 개별 기재. "임춘성 외 X명" 축약 절대 금지. "(기관명) 이름" 형식.
+- place는 실제 회의·교육이 열리는 장소. 식당·카페 등 식사 장소는 절대 기재 금지.
+- lectures는 품의서에 강의 일정이 있을 경우 모두 추출. 없으면 빈 배열 [].`;
 
   const result = await callGeminiJSON([filePart, { text: prompt }]);
   return result as unknown as ApprovalInfo;
@@ -159,22 +172,30 @@ ${recentMeetings
       ? `외부 참석 기관: ${[...new Set(externalOrgs)].join(', ')}`
       : '내부 팀 회의';
 
+  const lectureSection = approvalInfo.lectures && approvalInfo.lectures.length > 0
+    ? `\n강의 일정 (반드시 이 내용을 중심으로 회의록 작성):\n` +
+      approvalInfo.lectures.map(l => `  - ${l.time} : ${l.title} / ${l.instructor}`).join('\n')
+    : '';
+
   const userPrompt = `아래 정보를 바탕으로 회의록의 "회의 내용"과 "향후 일정 및 요청 사항"을 작성해주세요.
 
 ━━ 회의 정보 ━━
 회의 주제: ${approvalInfo.topic}
 회의 목적: ${approvalInfo.purpose}
 일시: ${approvalInfo.date} ${approvalInfo.startTime}~${approvalInfo.endTime}
-장소: ${approvalInfo.place}
+[회의·교육 장소]: ${approvalInfo.place}  ※ 이곳이 실제 교육·회의 장소. 반드시 이 장소로 기재할 것.
+[식사 장소]: ${receiptInfo.storeFullName}  ※ 회의 후 네트워킹 식사 장소. 본문에 불필요하게 넣지 말 것.
 참석자 전원: ${approvalInfo.attendees.join(', ')}
-${orgHint}
-식사·음료 장소: ${receiptInfo.storeFullName} (₩${receiptInfo.amount.toLocaleString()})
+${orgHint}${lectureSection}
 
 ━━ 작성 지침 ━━
-- 시스템 프롬프트의 규칙을 엄격히 따를 것
-- 참석자 구성과 회의 주제에 맞는 내용만 작성
-- 외부 기관 참석자가 있으면 해당 기관의 역할과 협력 내용을 구체적으로 반영
-- 주제에서 벗어나거나 창작된 사실 절대 포함 금지
+- 강의 일정이 있는 경우, 각 강의 제목을 소제목(ㅇ)으로 삼아 해당 강의에서 다뤘을 내용을 구체적으로 서술할 것
+  (강의 제목·주제를 기반으로 합리적 추론은 허용. 단, 사실과 다른 내용 창작 금지)
+- 특정 개인·기관이 주어가 되는 발언 귀속 표현 절대 금지
+  금지: "OOO 교수가 설명하였음", "KAIST 교수진이 주도하였음"
+  허용: "AI 협업 전략에 대한 교육이 진행되었음", "드론 기술 적용 사례를 검토하였음"
+- 강사명은 소제목 또는 교육 진행 맥락에서만 간략히 언급 가능 (발언 귀속 아닌 교육 진행자로서)
+- 회의·교육의 핵심 내용을 중심으로 서술하고, 시스템 프롬프트의 공문서 형식을 엄수할 것
 - "회의 내용" 항목과 "향후 일정 및 요청 사항" 항목을 구분하여 출력`;
 
   return callGeminiText(systemPrompt, userPrompt);
