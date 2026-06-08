@@ -1,10 +1,10 @@
-import { GoogleGenerativeAI, Part } from '@google/generative-ai';
+import Anthropic from '@anthropic-ai/sdk';
 import { SYSTEM_CONTEXT } from './claude-context';
 
 function getClient() {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error('GEMINI_API_KEY 환경변수가 설정되지 않았습니다.');
-  return new GoogleGenerativeAI(apiKey);
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error('ANTHROPIC_API_KEY 환경변수가 설정되지 않았습니다.');
+  return new Anthropic({ apiKey });
 }
 
 // ─── 공통 타입 ────────────────────────────────────────────────
@@ -18,8 +18,8 @@ export interface ReceiptInfo {
 }
 
 export interface LectureItem {
-  time: string;    // "14:00~15:30"
-  title: string;   // "미래 국방 조직을 위한 AI 협업 전략"
+  time: string;       // "14:00~15:30"
+  title: string;      // "미래 국방 조직을 위한 AI 협업 전략"
   instructor: string; // "KAIST 김주호 교수"
 }
 
@@ -42,37 +42,42 @@ export interface RecentMeeting {
 }
 
 // ─── 내부 헬퍼: JSON 응답 ─────────────────────────────────────
-async function callGeminiJSON(
-  parts: Part[],
+async function callClaudeJSON(
+  messages: Anthropic.MessageParam[],
+  maxTokens: number,
 ): Promise<Record<string, unknown>> {
-  const model = getClient().getGenerativeModel({
-    model: 'gemini-2.5-flash',
-    generationConfig: {
-      maxOutputTokens: 4096,
-      responseMimeType: 'application/json',
-      // @ts-expect-error thinkingConfig is supported but not yet in type defs
-      thinkingConfig: { thinkingBudget: 0 }, // thinking 비활성화 (JSON 파싱엔 불필요)
-    },
+  const response = await getClient().messages.create({
+    model: 'claude-opus-4-5',
+    max_tokens: maxTokens,
+    messages,
   });
 
-  const result = await model.generateContent(parts);
-  const text = result.response.text();
-  return JSON.parse(text);
+  const text = response.content
+    .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+    .map((b) => b.text)
+    .join('');
+
+  const cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+  return JSON.parse(cleaned);
 }
 
 // ─── 내부 헬퍼: 텍스트 응답 ──────────────────────────────────
-async function callGeminiText(
-  systemPrompt: string,
-  userPrompt: string,
+async function callClaudeText(
+  messages: Anthropic.MessageParam[],
+  system: string,
+  maxTokens: number,
 ): Promise<string> {
-  const model = getClient().getGenerativeModel({
-    model: 'gemini-2.5-flash',
-    systemInstruction: systemPrompt + '\n\n[필수] 마크다운 문법 절대 사용 금지. **, *, #, >, - 등 마크다운 기호 사용 금지. 오직 지정된 공문서 형식(ㅇ, - 들여쓰기)만 사용할 것.',
-    generationConfig: { maxOutputTokens: 8192 },
+  const response = await getClient().messages.create({
+    model: 'claude-opus-4-5',
+    max_tokens: maxTokens,
+    system,
+    messages,
   });
 
-  const result = await model.generateContent(userPrompt);
-  return result.response.text();
+  return response.content
+    .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+    .map((b) => b.text)
+    .join('');
 }
 
 // ─── 1. 영수증 파싱 ───────────────────────────────────────────
@@ -80,13 +85,21 @@ export async function parseReceipt(
   fileBase64: string,
   mimeType: string,
 ): Promise<ReceiptInfo> {
-  // Gemini는 PDF도 inlineData로 처리
-  const filePart: Part = {
-    inlineData: {
-      mimeType: mimeType as string,
-      data: fileBase64,
-    },
-  };
+  const isPdf = mimeType === 'application/pdf';
+
+  const fileBlock = isPdf
+    ? ({
+        type: 'document',
+        source: { type: 'base64', media_type: 'application/pdf', data: fileBase64 },
+      } as const)
+    : ({
+        type: 'image',
+        source: {
+          type: 'base64',
+          media_type: mimeType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
+          data: fileBase64,
+        },
+      } as const);
 
   const prompt = `이 비즈플레이 법인카드 영수증에서 다음 정보를 추출하여 JSON으로만 응답하세요.
 다른 텍스트 없이 JSON만 출력하세요.
@@ -102,19 +115,16 @@ export async function parseReceipt(
 
 날짜나 시각이 명확하지 않으면 null로 표기하세요.`;
 
-  const result = await callGeminiJSON([filePart, { text: prompt }]);
+  const result = await callClaudeJSON(
+    [{ role: 'user', content: [fileBlock as never, { type: 'text', text: prompt }] }],
+    400,
+  );
+
   return result as unknown as ReceiptInfo;
 }
 
 // ─── 2. 사전 품의서 파싱 ──────────────────────────────────────
 export async function parseApprovalDoc(fileBase64: string): Promise<ApprovalInfo> {
-  const filePart: Part = {
-    inlineData: {
-      mimeType: 'application/pdf',
-      data: fileBase64,
-    },
-  };
-
   const prompt = `이 사전품의서(회의비 품의서) PDF에서 다음 정보를 추출하여 JSON으로만 응답하세요.
 다른 텍스트 없이 JSON만 출력하세요.
 
@@ -135,9 +145,24 @@ export async function parseApprovalDoc(fileBase64: string): Promise<ApprovalInfo
 중요사항:
 - attendees는 품의서에 기재된 모든 참석자를 개별 기재. "임춘성 외 X명" 축약 절대 금지. "(기관명) 이름" 형식.
 - place는 실제 회의·교육이 열리는 장소. 식당·카페 등 식사 장소는 절대 기재 금지.
-- lectures는 품의서에 강의 일정이 있을 경우 모두 추출. 없으면 빈 배열 [].`;
+- lectures는 품의서에 강의/교육 일정이 있을 경우 모두 추출. 없으면 빈 배열 [].`;
 
-  const result = await callGeminiJSON([filePart, { text: prompt }]);
+  const result = await callClaudeJSON(
+    [
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'document',
+            source: { type: 'base64', media_type: 'application/pdf', data: fileBase64 },
+          } as never,
+          { type: 'text', text: prompt },
+        ],
+      },
+    ],
+    1200,
+  );
+
   return result as unknown as ApprovalInfo;
 }
 
@@ -190,13 +215,13 @@ ${orgHint}${lectureSection}
 
 ━━ 작성 지침 ━━
 - 강의 일정이 있는 경우, 각 강의 제목을 소제목(ㅇ)으로 삼아 해당 강의에서 다뤘을 내용을 구체적으로 서술할 것
-  (강의 제목·주제를 기반으로 합리적 추론은 허용. 단, 사실과 다른 내용 창작 금지)
+  (강의 제목·주제를 기반으로 합리적 추론은 허용. 단, 사실과 전혀 다른 내용 창작 금지)
 - 특정 개인·기관이 주어가 되는 발언 귀속 표현 절대 금지
   금지: "OOO 교수가 설명하였음", "KAIST 교수진이 주도하였음"
   허용: "AI 협업 전략에 대한 교육이 진행되었음", "드론 기술 적용 사례를 검토하였음"
-- 강사명은 소제목 또는 교육 진행 맥락에서만 간략히 언급 가능 (발언 귀속 아닌 교육 진행자로서)
-- 회의·교육의 핵심 내용을 중심으로 서술하고, 시스템 프롬프트의 공문서 형식을 엄수할 것
+- 강사명은 교육 진행 맥락에서만 간략히 언급 가능 (발언 귀속 아닌 교육 진행자로서)
+- 시스템 프롬프트의 공문서 형식을 엄수할 것
 - "회의 내용" 항목과 "향후 일정 및 요청 사항" 항목을 구분하여 출력`;
 
-  return callGeminiText(systemPrompt, userPrompt);
+  return callClaudeText([{ role: 'user', content: userPrompt }], systemPrompt, 1500);
 }
