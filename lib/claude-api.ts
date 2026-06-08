@@ -47,9 +47,10 @@ async function callGeminiJSON(
   const result = await model.generateContent(parts);
   const text = result.response.text();
 
-  // ```json ... ``` 펜스 제거 후 파싱
-  const cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
-  return JSON.parse(cleaned);
+  // { ... } 블록만 추출 (앞뒤 불필요한 텍스트 제거)
+  const match = text.match(/\{[\s\S]*\}/);
+  if (!match) throw new Error('JSON 응답을 찾을 수 없습니다: ' + text.slice(0, 200));
+  return JSON.parse(match[0]);
 }
 
 // ─── 내부 헬퍼: 텍스트 응답 ──────────────────────────────────
