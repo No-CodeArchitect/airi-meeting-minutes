@@ -60,7 +60,7 @@ async function callGeminiText(
 ): Promise<string> {
   const model = getClient().getGenerativeModel({
     model: 'gemini-2.5-flash',
-    systemInstruction: systemPrompt,
+    systemInstruction: systemPrompt + '\n\n[필수] 마크다운 문법 절대 사용 금지. **, *, #, >, - 등 마크다운 기호 사용 금지. 오직 지정된 공문서 형식(ㅇ, - 들여쓰기)만 사용할 것.',
     generationConfig: { maxOutputTokens: maxTokens },
   });
 
@@ -177,5 +177,5 @@ ${orgHint}
 - 주제에서 벗어나거나 창작된 사실 절대 포함 금지
 - "회의 내용" 항목과 "향후 일정 및 요청 사항" 항목을 구분하여 출력`;
 
-  return callGeminiText(systemPrompt, userPrompt, 1200);
+  return callGeminiText(systemPrompt, userPrompt, 2500);
 }
