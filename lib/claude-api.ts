@@ -40,7 +40,7 @@ async function callGeminiJSON(
   maxTokens: number,
 ): Promise<Record<string, unknown>> {
   const model = getClient().getGenerativeModel({
-    model: 'gemini-2.5-flash-preview-05-20',
+    model: 'gemini-2.5-flash',
     generationConfig: { maxOutputTokens: maxTokens },
   });
 
@@ -59,7 +59,7 @@ async function callGeminiText(
   maxTokens: number,
 ): Promise<string> {
   const model = getClient().getGenerativeModel({
-    model: 'gemini-2.5-flash-preview-05-20',
+    model: 'gemini-2.5-flash',
     systemInstruction: systemPrompt,
     generationConfig: { maxOutputTokens: maxTokens },
   });
