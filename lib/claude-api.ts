@@ -41,16 +41,15 @@ async function callGeminiJSON(
 ): Promise<Record<string, unknown>> {
   const model = getClient().getGenerativeModel({
     model: 'gemini-2.5-flash',
-    generationConfig: { maxOutputTokens: maxTokens },
+    generationConfig: {
+      maxOutputTokens: maxTokens,
+      responseMimeType: 'application/json',
+    },
   });
 
   const result = await model.generateContent(parts);
   const text = result.response.text();
-
-  // { ... } 블록만 추출 (앞뒤 불필요한 텍스트 제거)
-  const match = text.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error('JSON 응답을 찾을 수 없습니다: ' + text.slice(0, 200));
-  return JSON.parse(match[0]);
+  return JSON.parse(text);
 }
 
 // ─── 내부 헬퍼: 텍스트 응답 ──────────────────────────────────
