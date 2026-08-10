@@ -293,6 +293,7 @@ export default function NewPage() {
   const [approval, setApproval] = useState<File | null>(null);
   const [parsed, setParsed]   = useState<ParsedData | null>(null);
   const [error, setError]     = useState('');
+  const [saved, setSaved]     = useState<{ id: string; driveError: string } | null>(null);
 
   // 모드 전환
   const [mode, setMode] = useState<Mode>('new');
@@ -371,6 +372,13 @@ export default function NewPage() {
       const res = await fetch('/api/confirm', { method: 'POST', body: fd });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? '저장 실패');
+      // 회의록 DB 저장은 성공. 단, Drive 업로드가 실패했으면
+      // 조용히 넘어가지 말고 실제 에러를 화면에 보여준다.
+      if (json.driveError) {
+        setSaved({ id: json.id, driveError: json.driveError });
+        setStage('editing');
+        return;
+      }
       router.push(`/meetings/${json.id}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : '오류가 발생했습니다.');
@@ -445,7 +453,48 @@ export default function NewPage() {
         <>
           <p className="text-sm text-gray-500 mb-6">영수증과 사전 품의서를 업로드하면 회의록 초안을 자동 생성합니다.</p>
 
-          {stage === 'upload' && (
+          {saved && (
+            <div className="mb-6 space-y-4">
+              <div className="bg-green-50 border border-green-200 rounded-xl p-5">
+                <p className="text-sm font-semibold text-green-800">✅ 회의록 DB 저장 완료</p>
+                <a
+                  href={`/meetings/${saved.id}`}
+                  className="inline-block mt-1 text-sm text-blue-600 underline"
+                >
+                  저장된 회의록 보기
+                </a>
+              </div>
+              <div className="bg-red-50 border border-red-200 rounded-xl p-5">
+                <p className="text-sm font-semibold text-red-800 mb-2">⚠️ 구글 드라이브 업로드 실패</p>
+                <p className="text-xs text-red-600 mb-2">회의록은 저장됐지만 Drive 폴더/파일은 만들어지지 않았습니다. 실제 오류 원문:</p>
+                <pre className="text-xs bg-white border border-red-200 rounded-lg p-3 whitespace-pre-wrap break-words text-red-900">
+{saved.driveError}
+                </pre>
+                <button
+                  type="button"
+                  onClick={() => navigator.clipboard?.writeText(saved.driveError)}
+                  className="mt-2 text-xs text-gray-500 underline"
+                >
+                  오류 원문 복사
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setSaved(null);
+                  setStage('upload');
+                  setReceipt(null);
+                  setApproval(null);
+                  setParsed(null);
+                }}
+                className="text-xs text-gray-500 underline"
+              >
+                새 회의록 등록으로 돌아가기
+              </button>
+            </div>
+          )}
+
+          {!saved && stage === 'upload' && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -477,7 +526,7 @@ export default function NewPage() {
             </div>
           )}
 
-          {stage === 'parsing' && (
+          {!saved && stage === 'parsing' && (
             <div className="bg-white rounded-xl border border-gray-200 p-16 text-center">
               <div className="text-4xl mb-4 animate-spin">⚙️</div>
               <p className="text-sm font-semibold text-gray-700 mb-2">Claude AI가 분석 중입니다...</p>
@@ -486,7 +535,7 @@ export default function NewPage() {
             </div>
           )}
 
-          {(stage === 'editing' || stage === 'confirming') && parsed && (
+          {!saved && (stage === 'editing' || stage === 'confirming') && parsed && (
             <MinutesEditor
               data={parsed}
               onConfirm={handleConfirm}
