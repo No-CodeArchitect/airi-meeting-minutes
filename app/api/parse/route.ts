@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { parseReceipt, parseApprovalDoc, generateMinutesContent } from '@/lib/claude-api';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getHandlerByCard } from '@/lib/card-map';
+import { getProjectByCard } from '@/lib/projects';
 
 export const maxDuration = 60; // Vercel 타임아웃 60초
 
@@ -34,25 +35,29 @@ export async function POST(req: NextRequest) {
       parseApprovalDoc(approvalBase64),
     ]);
 
-    // 카드 → 담당자
+    // 카드 → 담당자 / 사업(자동 판별)
     const handler = getHandlerByCard(receiptInfo.cardLast4 ?? '');
+    const project = getProjectByCard(receiptInfo.cardLast4);
 
-    // 최근 15건 컨텍스트
+    // 최근 컨텍스트 — 같은 사업(카드)만 참고용으로 사용
     const { data: recentRows } = await supabaseAdmin
       .from('meetings')
-      .select('date, topic, attendees, place')
+      .select('date, topic, attendees, place, card_last4')
       .order('date', { ascending: false })
-      .limit(15);
+      .limit(40);
 
-    const recentMeetings = (recentRows ?? []).map((m) => ({
-      date: m.date as string,
-      topic: m.topic as string,
-      attendees: m.attendees as string[],
-      place: (m.place as string) ?? '',
-    }));
+    const recentMeetings = (recentRows ?? [])
+      .filter((m) => getProjectByCard(m.card_last4 as string | null).id === project.id)
+      .slice(0, 15)
+      .map((m) => ({
+        date: m.date as string,
+        topic: m.topic as string,
+        attendees: m.attendees as string[],
+        place: (m.place as string) ?? '',
+      }));
 
-    // 회의록 본문 생성
-    const raw = await generateMinutesContent(receiptInfo, approvalInfo, recentMeetings);
+    // 회의록 본문 생성 (사업별 컨텍스트 주입)
+    const raw = await generateMinutesContent(receiptInfo, approvalInfo, recentMeetings, project.context);
 
     // "향후 일정 및 요청 사항" 기준으로 분리
     const splitIdx = raw.search(/향후\s*일정/);

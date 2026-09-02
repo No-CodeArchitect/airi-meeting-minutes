@@ -9,6 +9,7 @@ import {
 } from '@react-pdf/renderer';
 import path from 'path';
 import type { Meeting } from '@/types';
+import { getProjectByCard } from './projects';
 
 // ── 폰트 등록 ──────────────────────────────────────────────
 const fontDir = path.join(process.cwd(), 'public', 'fonts');
@@ -20,13 +21,7 @@ Font.register({
   ],
 });
 
-// ── 고정 상수 ──────────────────────────────────────────────
-const BIZ_NAME    = '군 장병 AI SW 역량강화 사업';
-const PROJ_NO     = 'RS-2024-00431384';
-const PROJ_NAME   = '군 특화 AI 교육과정 개설·운영\n(AI 리더십·정책·프로젝트 과정)';
-const ORG_NAME    = '인공지능연구원';
-const RESEARCHER  = '연구책임자';
-const PI_NAME     = '임춘성';
+// ── 사업 고정값은 카드번호(meeting.card_last4)로 자동 판별 → lib/projects.ts 참조 ──
 
 // ── 색상 / 두께 ─────────────────────────────────────────────
 const BORDER   = 0.8;
@@ -229,6 +224,7 @@ function groupAttendees(attendees: string[]): string {
 
 // ── PDF 문서 ────────────────────────────────────────────────
 function MeetingDocument({ meeting }: { meeting: Meeting }) {
+  const project = getProjectByCard(meeting.card_last4);
   const dateStr = meeting.date ? fmtDate(meeting.date) : '';
   const timeStr = [meeting.start_time, meeting.end_time].filter(Boolean).join(' ~ ');
   const dateTime = [dateStr, timeStr].filter(Boolean).join('  ');
@@ -250,17 +246,17 @@ function MeetingDocument({ meeting }: { meeting: Meeting }) {
           {/* 사업명 */}
           <View style={{ flexDirection: 'row', borderBottomWidth: BORDER, borderColor: BORDER_C }}>
             <View style={[S.labelCell, { borderRightWidth: BORDER, borderColor: BORDER_C }]}><Text>사업명</Text></View>
-            <View style={S.valueCell}><Text>{BIZ_NAME}</Text></View>
+            <View style={S.valueCell}><Text>{project.bizName}</Text></View>
           </View>
           {/* 과제번호 */}
           <View style={{ flexDirection: 'row', borderBottomWidth: BORDER, borderColor: BORDER_C }}>
             <View style={[S.labelCell, { borderRightWidth: BORDER, borderColor: BORDER_C }]}><Text>과제번호</Text></View>
-            <View style={S.valueCell}><Text>{PROJ_NO}</Text></View>
+            <View style={S.valueCell}><Text>{project.projNo}</Text></View>
           </View>
           {/* 과제명 */}
           <View style={{ flexDirection: 'row', borderBottomWidth: BORDER, borderColor: BORDER_C }}>
             <View style={[S.labelCell, { borderRightWidth: BORDER, borderColor: BORDER_C }]}><Text>과제명</Text></View>
-            <View style={S.valueCell}><Text>{PROJ_NAME}</Text></View>
+            <View style={S.valueCell}><Text>{project.projName}</Text></View>
           </View>
           {/* 일시 */}
           <View style={{ flexDirection: 'row', borderBottomWidth: BORDER, borderColor: BORDER_C }}>
@@ -300,13 +296,13 @@ function MeetingDocument({ meeting }: { meeting: Meeting }) {
         {/* ── 서명란 ── */}
         <View style={S.footerRow}>
           <View style={S.footerOrg}>
-            <Text style={S.footerOrgText}>{ORG_NAME}</Text>
+            <Text style={S.footerOrgText}>{project.orgName}</Text>
           </View>
           <View style={S.footerRole}>
-            <Text style={{ fontSize: 9 }}>{RESEARCHER}</Text>
+            <Text style={{ fontSize: 9 }}>{project.researcherRole}</Text>
           </View>
           <View style={S.footerName}>
-            <Text style={{ fontSize: 9 }}>{PI_NAME}</Text>
+            <Text style={{ fontSize: 9 }}>{project.piName}</Text>
           </View>
         </View>
 

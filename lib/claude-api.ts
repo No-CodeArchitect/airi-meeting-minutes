@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { SYSTEM_CONTEXT } from './claude-context';
+import { DEFAULT_PROJECT } from './projects';
 
 function getClient() {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -171,6 +171,7 @@ export async function generateMinutesContent(
   receiptInfo: ReceiptInfo,
   approvalInfo: ApprovalInfo,
   recentMeetings: RecentMeeting[],
+  systemContext: string = DEFAULT_PROJECT.context,
 ): Promise<string> {
   const recentContext =
     recentMeetings.length > 0
@@ -185,7 +186,7 @@ ${recentMeetings
   .join('\n')}`
       : '';
 
-  const systemPrompt = SYSTEM_CONTEXT + recentContext;
+  const systemPrompt = systemContext + recentContext;
 
   const externalOrgs = approvalInfo.attendees
     .filter((a) => a.includes('(') && !a.includes('인공지능연구원'))

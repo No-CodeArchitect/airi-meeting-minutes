@@ -4,6 +4,7 @@ export const CARD_MAP: Record<string, string> = {
   '4116': '임춘성',
   '1558': '장주현',
   '5317': '장주현',
+  '8252': '장주현', // 서울대-공군AX 사업
 };
 
 export function getHandlerByCard(cardLast4: string): string {
