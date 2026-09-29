@@ -25,7 +25,7 @@ const GUNTEUKHWA: ProjectInfo = {
   projName: '군 특화 AI 교육과정 개설·운영\n(AI 리더십·정책·프로젝트 과정)',
   orgName: '인공지능연구원',
   researcherRole: '연구책임자',
-  piName: '임춘성',
+  piName: '장주현',
   context: GUNTEUKHWA_CONTEXT,
 };
 
@@ -37,7 +37,7 @@ const GONGGUN_AX: ProjectInfo = {
   projName: '군·산·학 협력센터(서울/양재)',
   orgName: '인공지능연구원',
   researcherRole: '연구책임자',
-  piName: '임춘성',
+  piName: '장주현',
   context: GONGGUN_AX_CONTEXT,
 };
 
