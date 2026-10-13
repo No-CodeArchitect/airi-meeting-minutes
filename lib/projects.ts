@@ -5,6 +5,7 @@
 // ⚠️ 카드 끝 4자리는 사업 간 겹치면 안 됨. 겹치면 자동 판별 불가.
 import { SYSTEM_CONTEXT as GUNTEUKHWA_CONTEXT } from './claude-context';
 import { GONGGUN_AX_CONTEXT } from './claude-context-gonggun-ax';
+import { YUKGUN_AX_CONTEXT } from './claude-context-yukgun-ax';
 
 export interface ProjectInfo {
   id: string;
@@ -41,12 +42,25 @@ const GONGGUN_AX: ProjectInfo = {
   context: GONGGUN_AX_CONTEXT,
 };
 
+// 국방AI인재양성 — 육군AX(군·산·학 협력센터 판교) (신규)
+const YUKGUN_AX: ProjectInfo = {
+  id: 'yukgun-ax',
+  bizName: '국방AI인재양성',
+  projNo: 'RS-2026-25552043',
+  projName: '군·산·학 협력센터(판교)',
+  orgName: '인공지능연구원',
+  researcherRole: '연구책임자',
+  piName: '전영진',
+  context: YUKGUN_AX_CONTEXT,
+};
+
 // 카드 끝 4자리 → 사업
 const CARD_TO_PROJECT: Record<string, ProjectInfo> = {
   '4116': GUNTEUKHWA,
   '1558': GUNTEUKHWA,
   '5317': GUNTEUKHWA,
   '8252': GONGGUN_AX,
+  '5346': YUKGUN_AX,
 };
 
 // 미지정 카드/과거 데이터는 기존 사업으로 처리
